@@ -2,21 +2,50 @@
 - hosts: all
   tasks:
     - #shell: 'echo hello > /vagrant/world.txt'
-    
-    - name: 'Instala o PHP5'
+
+    # boa prática ao agrupar pacotes de instalação
+    - name: 'Instala pacotes de dependencia do sistema operacional'
       apt: 
-        name: php5
+        # name: {{ item }} # lista de itens recebidas no with_items
+        name: [ 'php5',
+                'apache2',
+                'libapache2-mod-php5',
+                'php5-gd',
+                'libssh2-php',
+                'php5-mcrypt',
+                'mysql-server',
+                'python-mysqldb',
+                'php5-mysql' ]
         state: latest
       become: yes
+      # with_items:
+      #   - php5
+      #   - apache2
+      #   - libapache2-mod-php5
 
-    - name: 'Instala o Apache2'
-      apt:
-        name: apache2
-        state: latest
-      become: yes
+    - name: 'Cria o banco do MySQL'
+      mysql_db:
+        name: wordpress_db
+        login_user: root
+        state: present
+    # GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 
-    - name: 'Instala o modphp'
-      apt:
-        name: libapache2-mod-php5
-        state: latest
-      become: yes
+      
+
+
+    # modo verboso
+    #- name: 'Instala o PHP5'
+    #  apt: 
+    #    name: php5
+    #    state: latest
+    #  become: yes
+    #- name: 'Instala o Apache2'
+    #  apt:
+    #    name: apache2
+    #    state: latest
+    #  become: yes
+    #- name: 'Instala o modphp'
+    #  apt:
+    #    name: libapache2-mod-php5
+    #    state: latest
+    #  become: yes

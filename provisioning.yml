@@ -1,51 +1,167 @@
 ---
-- hosts: all
-  tasks:
-    - #shell: 'echo hello > /vagrant/world.txt'
 
-    # boa prática ao agrupar pacotes de instalação
-    - name: 'Instala pacotes de dependencia do sistema operacional'
-      apt: 
-        # name: {{ item }} # lista de itens recebidas no with_items
-        name: [ 'php5',
-                'apache2',
-                'libapache2-mod-php5',
-                'php5-gd',
-                'libssh2-php',
-                'php5-mcrypt',
-                'mysql-server',
-                'python-mysqldb',
-                'php5-mysql' ]
-        state: latest
-      become: yes
-      # with_items:
-      #   - php5
-      #   - apache2
-      #   - libapache2-mod-php5
+  # Configurações do servidor mysql
+  - hosts: database
+    become: true
+    become_user: root
 
-    - name: 'Cria o banco do MySQL'
-      mysql_db:
-        name: wordpress_db
-        login_user: root
-        state: present
-    # GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+    handlers:
 
+      - name: restart mysql
+        service:
+          name: mysql
+          state: restarted
+        become: yes
+
+    tasks:
+      - name: Update apt repo and cache on all Debian/Ubuntu boxes
+        apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+      - name: Upgrade all packages on servers
+        apt: upgrade=dist force_apt_get=yes
+
+      - name: Check if a reboot is needed on all servers
+        register: reboot_required_file
+        stat: path=/var/run/reboot-required get_md5=no
+
+      - name: Reboot the box if kernel updated
+        reboot:
+          msg: "Reboot initiated by Ansible for kernel updates"
+          connect_timeout: 5
+          reboot_timeout: 300
+          pre_reboot_delay: 0
+          post_reboot_delay: 30
+          test_command: uptime
+        when: reboot_required_file.stat.exists
+
+      # boa prática ao agrupar pacotes de instalação
+      - name: 'Instala pacotes de dependencia do sistema operacional'
+        apt: 
+          # name: {{ item }} # lista de itens recebidas no with_items
+          name: [ 'mysql-server',
+                  'python-mysqldb']
+          state: latest
+        become: yes
+
+      # Configurações do MySQL
+      - name: 'Cria o banco do MySQL'
+        mysql_db:
+          name: wordpress_db
+          login_user: root
+          state: present # absent(desinstala)
+
+      - name: 'Cria o usuário do MySQL'
+        mysql_user:
+          login_user: root
+          name: wordpress_user
+          password: '12345'
+          priv: 'wordpress_db.*:ALL'
+          state: present
+          host: "{{ % }}"
+          # GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+        with_items:
+          - 'localhost'
+          - '127.0.0.1'
+          - '11.168.0.55'
+          - '192.168.1.111'
       
+      - name: 'Configuração para conexões remotas'
+        copy:
+          src: 'files/my.cnf' 
+          dest: '/etc/mysql/my.cnf'
+        become: yes
+        notify:
+          - restart mysql 
+        
 
+  # Configurações do servidor wordpress
+  - hosts: wordpress
+    become: true
+    become_user: root
 
-    # modo verboso
-    #- name: 'Instala o PHP5'
-    #  apt: 
-    #    name: php5
-    #    state: latest
-    #  become: yes
-    #- name: 'Instala o Apache2'
-    #  apt:
-    #    name: apache2
-    #    state: latest
-    #  become: yes
-    #- name: 'Instala o modphp'
-    #  apt:
-    #    name: libapache2-mod-php5
-    #    state: latest
-    #  become: yes
+    handlers:
+
+      - name: restart apache
+        service:
+          name: apache2
+          state: restarted
+        become: yes
+
+    tasks:
+      - name: Update apt repo and cache on all Debian/Ubuntu boxes
+        apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+      - name: Upgrade all packages on servers
+        apt: upgrade=dist force_apt_get=yes
+
+      - name: Check if a reboot is needed on all servers
+        register: reboot_required_file
+        stat: path=/var/run/reboot-required get_md5=no
+
+      - name: Reboot the box if kernel updated
+        reboot:
+          msg: "Reboot initiated by Ansible for kernel updates"
+          connect_timeout: 5
+          reboot_timeout: 300
+          pre_reboot_delay: 0
+          post_reboot_delay: 30
+          test_command: uptime
+        when: reboot_required_file.stat.exists
+
+      # boa prática ao agrupar pacotes de instalação
+      - name: 'Instala pacotes de dependencia do sistema operacional'
+        apt: 
+          name: [ 'php5',
+                  'apache2',
+                  'libapache2-mod-php5',
+                  'php5-gd',
+                  'libssh2-php',
+                  'php5-mcrypt',
+                  'php5-mysql' ]
+          state: latest
+        become: yes
+
+      # Configurações do Wordpress
+      - name: 'Download wordpress'
+        get_url:
+          #url: 'https://wordpress.org/latest.tar.gz'
+          url: 'https://br.wordpress.org/wordpress-5.0-pt_BR.tar.gz'
+          dest: '/tmp/wordpress.tar.gz'
+          # mode: '0440' permissões de leitura e escrita
+
+      - name: 'Descompactar arquivo wordpress.tar.gz'
+        unarchive:
+          src: '/tmp/wordpress.tar.gz'
+          dest: '/var/www/'
+          remote_src: yes
+        become: yes
+
+      - name: 'Faz uma cópia do arquivo wp-config-sample.php como wp-config.php'
+        ansible.builtin.copy:
+          src: '/var/www/wordpress/wp-config-sample.php'
+          dest: '/var/www/wordpress/wp-config.php'
+          remote_src: yes
+        become: yes
+
+      - name: 'Configura wp-config.php com as entradas do banco de dados'
+        ansible.builtin.replace:
+          path: '/var/www/wordpress/wp-config.php'
+          regexp: "{{ item.regex }}"
+          replace: "{{ item.value }}"
+        with_items:
+          - { regex: 'database_name_here', value: 'wordpress_db' }
+          - { regex: 'nome_do_banco_de_dados_aqui', value: 'wordpress_db' }
+          - { regex: 'username_here', value: 'wordpress_user' }
+          - { regex: 'nome_de_usuario_aqui', value: 'wordpress_user' }
+          - { regex: 'password_here', value: '12345' }
+          - { regex: 'senha_aqui', value: '12345' }
+          - { regex: 'localhost', value: '11.168.0.57' }
+        become: yes
+
+      - name: 'copia arquivo 000-default.conf da maquina host para a maquina virtual - Configura Apache para servir o Wordpress'
+        ansible.builtin.copy:
+          src: 'files/000-default.conf'
+          dest: '/etc/apache2/sites-available/000-default.conf'
+        become: yes
+        notify:
+          - restart apache       

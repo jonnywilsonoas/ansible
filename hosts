@@ -2,3 +2,6 @@
 [wordpress]
 11.168.0.55 ansible_user=vagrant ansible_ssh_private_key_file="/home/zaku/Documents/workspaces/git/ansible/.vagrant/machines/wordpress/virtualbox/private_key"
 #11.168.0.56 ansible_user=admin ansible_ssh_private_key_file="outra chave privada" # outra servidor não necessáriamente criado com o vagrant
+
+[database]
+11.168.0.57 ansible_user=vagrant ansible_ssh_private_key_file="/home/zaku/Documents/workspaces/git/ansible/.vagrant/machines/mysql/virtualbox/private_key"

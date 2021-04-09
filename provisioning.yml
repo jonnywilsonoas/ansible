@@ -1,5 +1,6 @@
 ---
 
+
   # Configurações do servidor mysql
   - hosts: database
     become: true
@@ -46,23 +47,23 @@
       # Configurações do MySQL
       - name: 'Cria o banco do MySQL'
         mysql_db:
-          name: wordpress_db
+          name: "{{ wp_db_name }}"
           login_user: root
           state: present # absent(desinstala)
 
       - name: 'Cria o usuário do MySQL'
         mysql_user:
           login_user: root
-          name: wordpress_user
-          password: '12345'
-          priv: 'wordpress_db.*:ALL'
+          name: "{{ wp_username }}"
+          password: "{{wp_user_password}}"
+          priv: "{{ wp_db_name }}.*:ALL"
           state: present
-          host: "{{ % }}"
+          host: "{{ item }}"
           # GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
         with_items:
           - 'localhost'
           - '127.0.0.1'
-          - '11.168.0.55'
+          - "{{ wp_host_ip }}"
           - '192.168.1.111'
       
       - name: 'Configuração para conexões remotas'
@@ -138,30 +139,39 @@
 
       - name: 'Faz uma cópia do arquivo wp-config-sample.php como wp-config.php'
         ansible.builtin.copy:
-          src: '/var/www/wordpress/wp-config-sample.php'
-          dest: '/var/www/wordpress/wp-config.php'
+          src: "{{ wp_installation_dir }}/wp-config-sample.php"
+          dest: "{{ wp_installation_dir }}/wp-config.php"
           remote_src: yes
         become: yes
 
       - name: 'Configura wp-config.php com as entradas do banco de dados'
         ansible.builtin.replace:
-          path: '/var/www/wordpress/wp-config.php'
+          path: "{{ wp_installation_dir }}/wp-config.php"
           regexp: "{{ item.regex }}"
           replace: "{{ item.value }}"
         with_items:
-          - { regex: 'database_name_here', value: 'wordpress_db' }
-          - { regex: 'nome_do_banco_de_dados_aqui', value: 'wordpress_db' }
-          - { regex: 'username_here', value: 'wordpress_user' }
-          - { regex: 'nome_de_usuario_aqui', value: 'wordpress_user' }
-          - { regex: 'password_here', value: '12345' }
-          - { regex: 'senha_aqui', value: '12345' }
-          - { regex: 'localhost', value: '11.168.0.57' }
+          - { regex: 'database_name_here', value: "{{ wp_db_name }}" }
+          - { regex: 'nome_do_banco_de_dados_aqui', value: "{{ wp_db_name }}" }
+          - { regex: 'username_here', value: "{{ wp_username }}" }
+          - { regex: 'nome_de_usuario_aqui', value: "{{ wp_username }}" }
+          - { regex: 'password_here', value: "{{wp_user_password}}" }
+          - { regex: 'senha_aqui', value: "{{wp_user_password}}" }
+          - { regex: 'localhost', value: "{{ wp_db_ip }}" }
         become: yes
 
-      - name: 'copia arquivo 000-default.conf da maquina host para a maquina virtual - Configura Apache para servir o Wordpress'
-        ansible.builtin.copy:
-          src: 'files/000-default.conf'
+      # template  
+      - name: 'Configurara Apache para servir Wordpress (template)'
+        template:
+          src: 'templates/000-default.conf.j2'
           dest: '/etc/apache2/sites-available/000-default.conf'
         become: yes
         notify:
-          - restart apache       
+          - restart apache
+          
+      #- name: 'copia arquivo 000-default.conf da maquina host para a maquina virtual - Configura Apache para servir o Wordpress'
+      #  ansible.builtin.copy:
+      #    src: 'files/000-default.conf'
+      #    dest: '/etc/apache2/sites-available/000-default.conf'
+      #  become: yes
+      #  notify:
+      #    - restart apache       

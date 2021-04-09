@@ -8,3 +8,7 @@ ansible-playbook provisioning.yml -u vagrant -i hosts --private-key .vagrant/mac
 
 
 https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_db_module.html#ansible-collections-community-mysql-mysql-db-module
+
+
+vagrant up
+ansible-playbook -i hosts provisioning.yml

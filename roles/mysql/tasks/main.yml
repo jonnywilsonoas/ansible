@@ -1,0 +1,36 @@
+---
+- name: 'Instala pacotes de dependencia do sistema operacional'
+  apt: 
+    # name: {{ item }} # lista de itens recebidas no with_items
+    name: [ 'mysql-server',
+            'python-mysqldb']
+    state: latest
+  become: yes
+
+# Configurações do MySQL
+- name: 'Cria o banco do MySQL'
+  mysql_db:
+    name: "{{ wp_db_name }}"
+    login_user: root
+    state: present # absent(desinstala)
+
+- name: 'Cria o usuário do MySQL'
+  mysql_user:
+    login_user: root
+    name: "{{ wp_username }}"
+    password: "{{wp_user_password}}"
+    priv: "{{ wp_db_name }}.*:ALL"
+    state: present
+    host: "{{ item }}"
+    # GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+  with_items:
+    - "{{ wp_host_ip }}"
+    #- '192.168.1.111'
+
+- name: 'Configuração para conexões remotas'
+  copy:
+    src: 'files/my.cnf' 
+    dest: '/etc/mysql/my.cnf'
+  become: yes
+  notify:
+    - restart mysql 
